@@ -1,4 +1,6 @@
 /*
+GetFloat64 doesn't work
+
 local upval = 'This is an upvalue';
 
 print(string.dump(function()
