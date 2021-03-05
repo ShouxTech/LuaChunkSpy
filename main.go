@@ -4,10 +4,10 @@ local upval = 'This is an upvalue';
 print(string.dump(function()
 	local number = 10;
 	local bool = true;
-    upval = upval .. '!'
+    upval = upval .. '!';
 	print('Hello, world!');
 end):gsub('.', function(char)
-	return char:byte() .. ', '
+	return char:byte() .. ', ';
 end));
 */
 
