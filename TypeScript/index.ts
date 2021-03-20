@@ -333,7 +333,7 @@ function decodeBytecode(bytecode: number[]) {
     let luaNumberSize: number;
     let integralFlag: number;
 
-    [headerSignature, index] = getString(bytecode, index, 3);
+    [headerSignature, index] = getString(bytecode, index, 4);
     console.log(`Header signature: ${headerSignature}`);
 
     [versionNumber, index] = getInt8(bytecode, index);
