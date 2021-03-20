@@ -1,8 +1,18 @@
+/*
+GetFloat64 doesn't work.
+
+local upval = 'This is an upvalue';
+print(string.dump(function()
+	local number = 10;
+	local bool = true;
+	upval = upval .. '!';
+	print('Hello, world!');
+end):gsub('.', function(char)
+	return char:byte() .. ', ';
+end));
+*/
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace LuaChunkSpyCS {
     class Program {
