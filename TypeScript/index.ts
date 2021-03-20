@@ -125,7 +125,7 @@ function getString(bytecode: number[], index: number, strLen?: number): [string,
         [strLen, index] = getSizeT(bytecode, index);
     }
 
-    let strBytes: string[] = bytecode.slice(index, index + strLen - 1).map((value: number): string => String.fromCharCode(value)); // Subtract 1 from strLen because the last character is always '\0'.
+    let strBytes: string[] = bytecode.slice(index, index + strLen).map((value: number): string => String.fromCharCode(value));
 
     let str: string = strBytes.join('');
 
@@ -333,7 +333,7 @@ function decodeBytecode(bytecode: number[]) {
     let luaNumberSize: number;
     let integralFlag: number;
 
-    [headerSignature, index] = getString(bytecode, index, 4);
+    [headerSignature, index] = getString(bytecode, index, 3);
     console.log(`Header signature: ${headerSignature}`);
 
     [versionNumber, index] = getInt8(bytecode, index);
