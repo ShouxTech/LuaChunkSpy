@@ -1,24 +1,23 @@
 /*
-GetFloat64 doesn't work
-
-local upval = 'This is an upvalue';
-print(string.dump(function()
-	local number = 10;
-	local bool = true;
-	upval = upval .. '!';
-	print('Hello, world!');
-end):gsub('.', function(char)
-	return char:byte() .. ', ';
-end));
+	local upval = 'This is an upvalue';
+	print(string.dump(function()
+		local number = 10;
+		local bool = true;
+		upval = upval .. '!';
+		print('Hello, world!');
+	end):gsub('.', function(char)
+		return char:byte() .. ', ';
+	end));
 */
 
 #include <iostream>
+#include <vector>
 
-int bytecodeArray[259] = {
+std::vector<std::uint8_t> bytecode_array = {
 	27, 76, 117, 97, 81, 0, 1, 4, 8, 4, 8, 0, 7, 0, 0, 0, 0, 0, 0, 0, 60, 101, 118, 97, 108, 62, 0, 3, 0, 0, 0, 8, 0, 0, 0, 1, 0, 0, 4, 10, 0, 0, 0, 1, 0, 0, 0, 66, 0, 128, 0, 132, 0, 0, 0, 193, 64, 0, 0, 149, 192, 0, 1, 136, 0, 0, 0, 133, 128, 0, 0, 193, 192, 0, 0, 156, 64, 0, 1, 30, 0, 128, 0, 4, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 36, 64, 4, 2, 0, 0, 0, 0, 0, 0, 0, 33, 0, 4, 6, 0, 0, 0, 0, 0, 0, 0, 112, 114, 105, 110, 116, 0, 4, 14, 0, 0, 0, 0, 0, 0, 0, 72, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 10, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 7, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 110, 117, 109, 98, 101, 114, 0, 1, 0, 0, 0, 9, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 98, 111, 111, 108, 0, 2, 0, 0, 0, 9, 0, 0, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 117, 112, 118, 97, 108, 0
 };
 
-std::string luaOpcodeTypes[] = {
+std::string opcode_types[] = {
 	"ABC",  "ABx", "ABC",  "ABC",
 	"ABC",  "ABx", "ABC",  "ABx",
 	"ABC",  "ABC", "ABC",  "ABC",
@@ -31,7 +30,7 @@ std::string luaOpcodeTypes[] = {
 	"ABx",  "ABC"
 };
 
-std::string luaOpcodeNames[] = {
+std::string opcode_names[] = {
 	"MOVE",     "LOADK",     "LOADBOOL", "LOADNIL",
 	"GETUPVAL", "GETGLOBAL", "GETTABLE", "SETGLOBAL",
 	"SETUPVAL", "SETTABLE",  "NEWTABLE", "SELF",
@@ -44,233 +43,200 @@ std::string luaOpcodeNames[] = {
 	"CLOSURE",  "VARARG"
 };
 
-int* slice(int* array, int start, int end) {
-	int length = (end - start) + 1;
-	int* sliced = new int[length];
-	memcpy(sliced, array + start, sizeof(int) * length);
-	return sliced;
-}
+int (*get_int)(const std::vector<std::uint8_t>& bytecode, int& index);
+int (*get_size_t)(const std::vector<std::uint8_t>& bytecode, int& index);
 
-int getBits(int number, int n, int n2) {
-	return (((1 << n2) - 1) & (number >> (n - 1)));
-}
-
-int getInt8(int bytecode[], int &index) {
-	int* bytes = slice(bytecode, index, index + 1);
-	int b0 = bytes[0];
-	delete[] bytes;
+int get_int8(const std::vector<std::uint8_t>& bytecode, int& index) {
+	int res = bytecode[index];
 	index++;
-	return b0;
+	return res;
 }
 
-int getInt32(int bytecode[], int &index) {
-	int* bytes = slice(bytecode, index, index + 4);
-	int b0 = bytes[0], b1 = bytes[1], b2 = bytes[2], b3 = bytes[3];
-	delete[] bytes;
+int get_int32(const std::vector<std::uint8_t>& bytecode, int& index) {
+	int res = *(int*)(&bytecode[index]);
 	index += 4;
-	return b3 * 16777216 + b2 * 65536 + b1 * 256 + b0;
+	return res;
 }
 
-int getInt64(int bytecode[], int& index) {
+int get_int64(const std::vector<std::uint8_t>& bytecode, int& index) {
 	int a, b;
-	a = getInt32(bytecode, index);
-	b = getInt32(bytecode, index);
+	a = get_int32(bytecode, index);
+	b = get_int32(bytecode, index);
 	return b * 4294967296 + a;
 }
 
-float getFloat64(int bytecode[], int& index) {
-	int a, b;
-	a = getInt32(bytecode, index);
-	b = getInt32(bytecode, index);
-	return (-2 * getBits(b, 1, 32) + 1) * (2 ^ (getBits(b, 21, 31) - 1023)) *
-		((getBits(b, 1, 20) * (2 ^ 32) + a) / (2 ^ 52) + 1);
+float get_float64(const std::vector<std::uint8_t>& bytecode, int& index) {
+	double res = *(double*)(&bytecode[index]);
+	index += 8;
+	return res;
 }
 
-int (*getInt)(int bytecode[], int& index);
-int (*getSizeT)(int bytecode[], int& index);
-
-std::string getString(int bytecode[], int &index, int strLen = NULL) {
-	if (!strLen) {
-		strLen = getSizeT(bytecode, index);
+std::string get_string(const std::vector<std::uint8_t>& bytecode, int& index, int length = 0) {
+	if (!length) {
+		length = get_size_t(bytecode, index);
 	}
 
-	int* strBytes = slice(bytecode, index, index + strLen);
-
-	char* chars = new char[strLen];
-	for (int i = 0; i < strLen; i++) {
-		//std::cout << (char)strBytes[i] << std::endl;
-		chars[i] = (char)strBytes[i];
-	}
-
-	delete[] strBytes;
-
-	if (chars[strLen - 1] != 0) {
-		chars[strLen] = 0;
-	}
-
-	std::string str = chars;
-
-	index += strLen;
-	return str;
+	std::string res(reinterpret_cast<const char*>(&bytecode[index]), length);
+	index += length;
+	return res;
 }
 
-void decodeChunk(int bytecode[], int &index) {
-	std::string sourceName = getString(bytecode, index);
-	std::cout << "Source name: " << sourceName << std::endl;
+void decode_chunk(const std::vector<std::uint8_t>& bytecode, int& index) {
+	std::string source_name = get_string(bytecode, index);
+	std::cout << "Source name: " << source_name << '\n';
 
-	int firstLine = getInt(bytecode, index);
-	std::cout << "Line defined: " << firstLine << std::endl;
+	int first_line = get_int(bytecode, index);
+	std::cout << "Line defined: " << first_line << '\n';
 
-	int lastLine = getInt(bytecode, index);
-	std::cout << "Last line defined: " << lastLine << std::endl;
+	int last_line = get_int(bytecode, index);
+	std::cout << "Last line defined: " << last_line << '\n';
 
-	int upvalues = getInt8(bytecode, index);
-	std::cout << "Number of upvalues: " << upvalues << std::endl;
+	int upvalues = get_int8(bytecode, index);
+	std::cout << "Number of upvalues: " << upvalues << '\n';
 
-	int parameters = getInt8(bytecode, index);
-	std::cout << "Number of parameters: " << upvalues << std::endl;
+	int parameters = get_int8(bytecode, index);
+	std::cout << "Number of parameters: " << parameters << '\n';
 
-	int vararg = getInt8(bytecode, index);
-	std::cout << "Vararg flag: " << vararg << std::endl;
+	int vararg = get_int8(bytecode, index);
+	std::cout << "Vararg flag: " << vararg << '\n';
 
-	int stackSize = getInt8(bytecode, index);
-	std::cout << "Number of registers used: " << stackSize << std::endl;
+	int stack_size = get_int8(bytecode, index);
+	std::cout << "Number of registers used: " << stack_size << '\n';
 
-	int instructions = getInt(bytecode, index);
-	std::cout << "Number of instructions: " << instructions << std::endl;
+	int instructions = get_int(bytecode, index);
+	std::cout << "Number of instructions: " << instructions << '\n';
 
-	std::cout << "------------------------" << std::endl << "Instructions:" << std::endl;
+	std::cout << "------------------------\n" << "Instructions:" << '\n';
 	for (int i = 0; i < instructions; i++) {
-		int data = getInt32(bytecode, index);
-		int opcode = getBits(data, 1, 6);
-		std::string opcodeName = luaOpcodeNames[opcode];
-		std::string opcodeType = luaOpcodeTypes[opcode];
+		int data = get_int32(bytecode, index);
+		int opcode = data & 0x3F;
+		std::string opcode_name = opcode_names[opcode];
+		std::string opcode_type = opcode_types[opcode];
 
-		int a = getBits(data, 7, 14);
-		if (opcodeType == "ABC") {
-			int b = getBits(data, 24, 32);
-			int c = getBits(data, 15, 23);
-			std::cout << "[" << i << "] " << opcodeName << " " << a << " " << b << " " << c << std::endl;
-		} else if (opcodeType == "ABx") {
-			int bx = getBits(data, 15, 23);
-			std::cout << "[" << i << "] " << opcodeName << " " << a << " " << bx << std::endl;
-		} else if (opcodeType == "AsBx") {
-			int sbx = getBits(data, 15, 32) - 131071;
-			std::cout << "[" << i << "] " << opcodeName << " " << a << " " << sbx << std::endl;
+		int a = (data >> 6) & 0xFF;
+		int b = (data >> 23) & 0x1FF;
+		int c = (data >> 14) & 0x1FF;
+		if (opcode_type == "ABC") {
+			std::cout << "[" << i << "] " << opcode_name << " " << a << " " << b << " " << c << '\n';
+		} else if (opcode_type == "ABx") {
+			int bx = ((b << 9) & 0xFFE00 | c) & 0x3FFFF;
+			std::cout << "[" << i << "] " << opcode_name << " " << a << " " << bx << '\n';
+		} else if (opcode_type == "AsBx") {
+			int bx = ((b << 9) & 0xFFE00 | c) & 0x3FFFF;
+			int sbx = bx - 131071;
+			std::cout << "[" << i << "] " << opcode_name << " " << a << " " << sbx << '\n';
 		}
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 
-	int constants = getInt(bytecode, index);
-	std::cout << "Number of constants: " << constants << std::endl;
+	int constants = get_int(bytecode, index);
+	std::cout << "Number of constants: " << constants << '\n';
 
-	std::cout << "------------------------" << std::endl << "Constants:" << std::endl;
+	std::cout << "------------------------\n" << "Constants:" << '\n';
 	for (int i = 0; i < constants; i++) {
-		int constType = getInt8(bytecode, index);
+		int constType = get_int8(bytecode, index);
 
 		if (constType == 1) {
-			int constData = getInt8(bytecode, index) != 0;
-			std::cout << "[" << i << "] " << constData << std::endl;
-		}
-		else if (constType == 3) {
-			float constData = getFloat64(bytecode, index);
-			std::cout << "[" << i << "] " << constData << std::endl;
-		}
-		else if (constType == 4) {
-			std::string constData = getString(bytecode, index);
-			std::cout << "[" << i << "] " << constData << std::endl;
+			int const_data = get_int8(bytecode, index) != 0;
+			std::cout << "[" << i << "] " << const_data << '\n';
+		} else if (constType == 3) {
+			float const_data = get_float64(bytecode, index);
+			std::cout << "[" << i << "] " << const_data << '\n';
+		} else if (constType == 4) {
+			std::string const_data = get_string(bytecode, index);
+			std::cout << "[" << i << "] " << const_data << '\n';
 		}
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 
-	int prototypes = getInt(bytecode, index);
-	std::cout << "Number of prototypes: " << prototypes << std::endl;
+	int prototypes = get_int(bytecode, index);
+	std::cout << "Number of prototypes: " << prototypes << '\n';
 
-	std::cout << "------------------------" << std::endl << "Prototypes:" << std::endl;
+	std::cout << "------------------------\n" << "Prototypes:" << '\n';
 	for (int i = 0; i < prototypes; i++) {
-		decodeChunk(bytecode, index);
+		decode_chunk(bytecode, index);
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 
-	int lines = getInt(bytecode, index);
-	std::cout << "Source line position list size: " << lines << std::endl;
+	int lines = get_int(bytecode, index);
+	std::cout << "Source line position list size: " << lines << '\n';
 
-	std::cout << "------------------------" << std::endl << "Source line positions:" << std::endl;
+	std::cout << "------------------------\n" << "Source line positions:" << '\n';
 	for (int i = 0; i < lines; i++) {
-		int sourceLinePosition = getInt(bytecode, index);
-		std::cout << "[" << i << "] " << sourceLinePosition << std::endl;
+		int source_line_position = get_int(bytecode, index);
+		std::cout << "[" << i << "] " << source_line_position << '\n';
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 
-	int locals = getInt(bytecode, index);
-	std::cout << "Local list size: " << locals << std::endl;
+	int locals = get_int(bytecode, index);
+	std::cout << "Local list size: " << locals << '\n';
 
-	std::cout << "------------------------" << std::endl << "Locals:" << std::endl;
+	std::cout << "------------------------\n" << "Locals:" << '\n';
 	for (int i = 0; i < locals; i++) {
-		std::string name = getString(bytecode, index);
-		int startScope = getInt(bytecode, index);
-		int endScope = getInt(bytecode, index);
+		std::string name = get_string(bytecode, index);
+		int start_scope = get_int(bytecode, index);
+		int end_scope = get_int(bytecode, index);
 
-		std::cout << "[" << i << "] " << name << " " << startScope << " " << endScope << std::endl;
+		std::cout << "[" << i << "] " << name << " " << start_scope << " " << end_scope << '\n';
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 
-	int upvalueListSize = getInt(bytecode, index);
-	std::cout << "Upvalue list size: " << upvalueListSize << std::endl;
+	int upvalue_list_size = get_int(bytecode, index);
+	std::cout << "Upvalue list size: " << upvalue_list_size << '\n';
 
-	std::cout << "------------------------" << std::endl << "Upvalues:" << std::endl;
-	for (int i = 0; i < upvalueListSize; i++) {
-		std::string name = getString(bytecode, index);
-		std::cout << "[" << i << "] " << name << std::endl;
+	std::cout << "------------------------\n" << "Upvalues:" << '\n';
+	for (int i = 0; i < upvalue_list_size; i++) {
+		std::string name = get_string(bytecode, index);
+		std::cout << "[" << i << "] " << name << '\n';
 	}
-	std::cout << "------------------------" << std::endl;
+	std::cout << "------------------------\n";
 }
 
-void decodeBytecode(int bytecode[]) {
+void decode_bytecode(const std::vector<std::uint8_t>& bytecode) {
 	int index = 1;
 
-	std::string headerSignature = getString(bytecode, index, 3);
-	std::cout << "Header signature: " << headerSignature << std::endl;
+	std::string header_signature = get_string(bytecode, index, 3);
+	std::cout << "Header signature: " << header_signature << '\n';
 
-	int versionNumber = getInt8(bytecode, index);
-	std::cout << "Version number: " << versionNumber << ", Hex: 0x" << std::hex << versionNumber << std::endl;
+	int version_number = get_int8(bytecode, index);
+	std::cout << "Version number: " << version_number << ", Hex: 0x" << std::hex << version_number << '\n';
 
-	int formatVersion = getInt8(bytecode, index);
-	std::cout << "Format version: " << formatVersion << std::endl;
+	int format_version = get_int8(bytecode, index);
+	std::cout << "Format version: " << format_version << '\n';
 
-	int endiannessFlag = getInt8(bytecode, index);
-	std::cout << "Endianness flag: " << endiannessFlag << std::endl;
+	int endianness_flag = get_int8(bytecode, index);
+	std::cout << "Endianness flag: " << endianness_flag << '\n';
 
-	int intSize = getInt8(bytecode, index);
-	std::cout << "Int size: " << intSize << std::endl;
+	int int_size = get_int8(bytecode, index);
+	std::cout << "Int size: " << int_size << '\n';
 
-	int sizeT = getInt8(bytecode, index);
-	std::cout << "Size_T size: " << sizeT << std::endl;
+	int size_t_size = get_int8(bytecode, index);
+	std::cout << "Size_T size: " << size_t_size << '\n';
 
-	int instructionSize = getInt8(bytecode, index);
-	std::cout << "Instruction size: " << instructionSize << std::endl;
+	int instruction_size = get_int8(bytecode, index);
+	std::cout << "Instruction size: " << instruction_size << '\n';
 
-	int luaNumberSize = getInt8(bytecode, index);
-	std::cout << "Lua_Number size: " << luaNumberSize << std::endl;
+	int lua_number_size = get_int8(bytecode, index);
+	std::cout << "Lua_Number size: " << lua_number_size << '\n';
 
-	int integralFlag = getInt8(bytecode, index);
-	std::cout << "Integral flag: " << integralFlag << std::endl;
+	int integral_flag = get_int8(bytecode, index);
+	std::cout << "Integral flag: " << integral_flag << '\n';
 
-	if (intSize == 4) {
-		getInt = getInt32;
-	} else if (intSize == 8) {
-		getInt = getInt64;
+	if (int_size == 4) {
+		get_int = get_int32;
+	} else if (int_size == 8) {
+		get_int = get_int64;
 	}
 
-	if (sizeT == 4) {
-		getSizeT = getInt32;
-	} else if (sizeT == 8) {
-		getSizeT = getInt64;
+	if (size_t_size == 4) {
+		get_size_t = get_int32;
+	} else if (size_t_size == 8) {
+		get_size_t = get_int64;
 	}
 
-	decodeChunk(bytecode, index);
+	decode_chunk(bytecode, index);
 }
 
 int main() {
-	decodeBytecode(bytecodeArray);
+	decode_bytecode(bytecode_array);
 }
